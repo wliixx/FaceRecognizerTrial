@@ -1,2 +1,2 @@
 # FaceRecognizerTrial
-trial face recognizer program for ,y future projects. idk
+trial face recognizer program for my future projects. idk
