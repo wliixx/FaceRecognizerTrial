@@ -27,6 +27,37 @@ options = vision.FaceLandmarkerOptions(
 )
 detector = vision.FaceLandmarker.create_from_options(options)
 
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+SILLY_CAT_NAME = 'Silly car.jpy'
+SILLY_CAT_PATH = os.path.join(SCRIPT_DIR, SILLY_CAT_NAME)
+
+sillycat_image = cv2.imread(SILLY_CAT_PATH)
+if sillycat_image is None:
+    print(f'не удалось загрузить картинку по пути: {SILLY_CAT_PATH}')
+
+
+WINK_THRESHOLD = 0.5
+WINK_OPEN_THRESHOLD = 0.3
+JAW_OPEN_THRESHOLD = 0.35
+
+def get_blendshapes_dict(detection_result, face_index=0):
+    if not detection_result.face_blendshapes:
+        return {}
+    categories = detection_result.face_blendshapes[face_index]
+    return {c.category_name: c.score for c in categories}
+
+def is_winking(blendshapes):
+    left = blendshapes.get('eyeBlinkLeft', 0.0)
+    right = blendshapes.get('eyeBlinkRight', 0.0)
+    left_wink = left > WINK_THRESHOLD and right < WINK_OPEN_THRESHOLD
+    right_wink =  right > WINK_THRESHOLD and left < WINK_OPEN_THRESHOLD
+    return left_wink or right_wink
+
+def is_tongue_out(frame, face_landmarks, blendshapes):
+    jaw_open = blendshapes.get("jawOpen", 0.0)
+    if jaw_open < JAW_OPEN_THRESHOLD:
+        return False
+    
 FACE_OVAL = [
     (10, 338), (338, 297), (297, 332), (332, 284), (284, 251), (251, 389),
     (389, 356), (356, 454), (454, 323), (323, 361), (361, 288), (288, 397),
