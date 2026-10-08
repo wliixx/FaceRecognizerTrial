@@ -18,7 +18,7 @@ base_options = python.BaseOptions(model_asset_path=MODEL_PATH)
 options = vision.FaceLandmarkerOptions(
     base_options=base_options,
     running_mode=vision.RunningMode.VIDEO,
-    num_faces=1,
+    num_faces=10,
     min_face_detection_confidence=0.5,
     min_face_presence_confidence=0.5,
     min_tracking_confidence=0.5,
