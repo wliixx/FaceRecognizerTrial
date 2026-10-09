@@ -18,7 +18,7 @@ base_options = python.BaseOptions(model_asset_path=MODEL_PATH)
 options = vision.FaceLandmarkerOptions(
     base_options=base_options,
     running_mode=vision.RunningMode.VIDEO,
-    num_faces=10,
+    num_faces=1,
     min_face_detection_confidence=0.5,
     min_face_presence_confidence=0.5,
     min_tracking_confidence=0.5,
@@ -42,9 +42,15 @@ def find_reaction_image(folder, basename):
         ):
             return os.path.join(folder, filename)
     return None
+
+def get_blandshapes_dict(detection_result, face_index=0):
+    if not detection_result.face_blendshapes:
+        return{}
+    categoties = detection_result.face_blendshapes[face_index]
+    return {c.category_name: c.score for c in categoties}
  
  
-REACTION_IMAGE_PATH = find_reaction_image(SCRIPT_DIR, REACTION_IMAGE_BASENAME)
+'''REACTION_IMAGE_PATH = find_reaction_image(SCRIPT_DIR, REACTION_IMAGE_BASENAME)
  
 if REACTION_IMAGE_PATH is None:
     reaction_image = None
@@ -53,13 +59,17 @@ if REACTION_IMAGE_PATH is None:
 else:
     reaction_image = cv2.imread(REACTION_IMAGE_PATH)
     if reaction_image is None:
-        print(f"⚠ Файл найден ({REACTION_IMAGE_PATH}), но не читается как изображение.")
+    print(f"⚠ Файл найден ({REACTION_IMAGE_PATH}), но не читается как изображение.")'''
  
-# ПОРОГИ — подбери их под себя, глядя на реальные цифры в углу окна (DEBUG-строки)
+
 WINK_THRESHOLD = 0.3
 WINK_OPEN_THRESHOLD = 0.3
 JAW_OPEN_THRESHOLD = 0.35
- 
+SMILE_THRESHOLD = 0.7
+BROW_UP_THRESHOLD = 0.4
+PUCKER_THRESHOLD = 0.4
+FROWN_THRESHOLD = 0.4
+
  
 def get_blendshapes_dict(detection_result, face_index=0):
     if not detection_result.face_blendshapes:
@@ -99,15 +109,50 @@ def get_mouth_color_stats(frame, face_landmarks):
     return avg_hue, avg_sat
  
  
-def is_tongue_out(jaw_open, avg_hue, avg_sat):
+'''def is_tongue_out(jaw_open, avg_hue, avg_sat):
     if jaw_open < JAW_OPEN_THRESHOLD:
         return False
     if avg_hue is None:
         return False
     is_pinkish = (avg_hue < 15 or avg_hue > 135) and avg_sat > 60
-    return is_pinkish
- 
- 
+    return is_pinkish'''
+
+def check_wink_tongue(ctx):
+    b = ctx['b']
+    left = b.get('eyeBlinkLeft', 0.0)
+    right = b.get('eyeBlinkRight', 0.0)
+    winking = (left > WINK_THRESHOLD and right < WINK_OPEN_THRESHOLD) or \
+              (right > WINK_THRESHOLD and left < WINK_OPEN_THRESHOLD)
+    
+    if ctx['jaw_open'] < JAW_OPEN_THRESHOLD or ctx['hue'] is None:
+        tongue = False
+    else:
+        tongue = (ctx['hue'] < 15 or ctx['hue'] > 135) and ctx['sat'] > 60
+        
+    return winking and tongue
+
+def check_smile(ctx):
+    b = ctx['b']
+    smile = b.get('mouthSmileLeft', 0.0) + b.get('mouthSmileRight', 0.0)
+    return smile / 2 > SMILE_THRESHOLD
+
+        
+EXPRESSIONS = [
+    {'name': 'wink+tongue', 'image_basename': 'Silly cat', 'check': check_wink_tongue},
+    {'name': 'smile', 'image_basename': 'Smiling cat', 'check': check_smile},
+]
+
+for expr in EXPRESSIONS:
+    path = find_reaction_image(SCRIPT_DIR, expr['image_basename'])
+    if path is None:
+        expr['image'] = None
+        print(f"⚠ [{expr['name']}] не найден файл \"{expr['image_basename']}.*\" в папке {SCRIPT_DIR}")
+    else:
+        img = cv2.imread(path)
+        if img is None:
+            print(f"⚠ [{expr['name']}] файл найден ({path}), но не читается как изображение.")
+        expr["image"] = img
+        
 FACE_OVAL = [
     (10, 338), (338, 297), (297, 332), (332, 284), (284, 251), (251, 389),
     (389, 356), (356, 454), (454, 323), (323, 361), (361, 288), (288, 397),
@@ -183,7 +228,7 @@ while cap.isOpened():
     frame_timestamps_ms += 33
     detection_result = detector.detect_for_video(mp_image, frame_timestamps_ms)
  
-    expression_triggered = False
+    triggered_expr = None
  
     if detection_result.face_landmarks:
         for face_landmarks in detection_result.face_landmarks:
@@ -191,20 +236,24 @@ while cap.isOpened():
  
         blendshapes = get_blendshapes_dict(detection_result)
         face_landmarks = detection_result.face_landmarks[0]
- 
-        eye_blink_left = blendshapes.get('eyeBlinkLeft', 0.0)
-        eye_blink_right = blendshapes.get('eyeBlinkRight', 0.0)
-        jaw_open = blendshapes.get('jawOpen', 0.0)
         avg_hue, avg_sat = get_mouth_color_stats(frame, face_landmarks)
+        ctx = {
+            "b": blendshapes,
+            "jaw_open": blendshapes.get("jawOpen", 0.0),
+            "hue": avg_hue,
+            "sat": avg_sat,
+        }
  
-        winking = is_winking(blendshapes)
-        tongue = is_tongue_out(jaw_open, avg_hue, avg_sat)
-        expression_triggered = winking and tongue
+        # Проверяем выражения по очереди, срабатывает первое подошедшее
+        for expr in EXPRESSIONS:
+            if expr["check"](ctx):
+                triggered_expr = expr
+                break
  
-        # Итоговый статус
+        status_text = triggered_expr["name"] if triggered_expr else "..."
         cv2.putText(
             frame,
-            f'wink={winking} tongue={tongue}',
+            f"expression: {status_text}",
             (10, 30),
             cv2.FONT_HERSHEY_SIMPLEX,
             0.7,
@@ -212,32 +261,40 @@ while cap.isOpened():
             2,
         )
  
-        # DEBUG: реальные цифры, по которым принимается решение.
-        # Смотри на них, пока моргаешь/открываешь рот, и подбирай пороги выше.
+        # DEBUG: ключевые цифры для подбора порогов
         debug_lines = [
-            f"eyeBlinkLeft={eye_blink_left:.2f} eyeBlinkRight={eye_blink_right:.2f}",
-            f"jawOpen={jaw_open:.2f}  hue={avg_hue if avg_hue is None else round(avg_hue,1)} sat={avg_sat if avg_sat is None else round(avg_sat,1)}",
+            f"blink L/R={ctx['b'].get('eyeBlinkLeft',0):.2f}/{ctx['b'].get('eyeBlinkRight',0):.2f} "
+            f"jaw={ctx['jaw_open']:.2f}",
+            f"smile L/R={ctx['b'].get('mouthSmileLeft',0):.2f}/{ctx['b'].get('mouthSmileRight',0):.2f} "
+            f"browUp={ctx['b'].get('browInnerUp',0):.2f}",
+            f"frown L/R={ctx['b'].get('browDownLeft',0):.2f}/{ctx['b'].get('browDownRight',0):.2f} "
+            f"pucker={ctx['b'].get('mouthPucker',0):.2f}",
         ]
         for i, line in enumerate(debug_lines):
             cv2.putText(
-                frame,
-                line,
-                (10, 60 + i * 25),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.6,
-                (0, 255, 0),
-                1,
+                frame, line, (10, 60 + i * 22),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1,
             )
  
-    if expression_triggered and reaction_image is not None:
-        if not reaction_window_open:
-            reaction_window_open = True
-        cv2.imshow('Reaction', reaction_image)
+ 
+        '''eye_blink_left = blendshapes.get('eyeBlinkLeft', 0.0)
+        eye_blink_right = blendshapes.get('eyeBlinkRight', 0.0)
+        jaw_open = blendshapes.get('jawOpen', 0.0)
+        avg_hue, avg_sat = get_mouth_color_stats(frame, face_landmarks)
+ 
+        winking = is_winking(blendshapes)
+        tongue = is_tongue_out(jaw_open, avg_hue, avg_sat)
+        expression_triggered = winking and tongue'''
+        
+    if triggered_expr is not None and triggered_expr.get('image') is not None:
+        cv2.imshow('Reaction', triggered_expr['image'])
+        reaction_window_open = True
     elif reaction_window_open:
         cv2.destroyWindow('Reaction')
         reaction_window_open = False
- 
-    cv2.imshow("Face Skeleton", frame)
+        
+    cv2.imshow('Face Skeleton', frame)
+    
  
     if cv2.waitKey(1) & 0xFF == 27:
         break
