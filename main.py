@@ -50,17 +50,6 @@ def get_blandshapes_dict(detection_result, face_index=0):
     return {c.category_name: c.score for c in categoties}
  
  
-'''REACTION_IMAGE_PATH = find_reaction_image(SCRIPT_DIR, REACTION_IMAGE_BASENAME)
- 
-if REACTION_IMAGE_PATH is None:
-    reaction_image = None
-    print(f"⚠ Не найден файл \"{REACTION_IMAGE_BASENAME}.*\" в папке {SCRIPT_DIR}")
-    print("Проверь, что картинка лежит рядом со скриптом и имя начинается так же.")
-else:
-    reaction_image = cv2.imread(REACTION_IMAGE_PATH)
-    if reaction_image is None:
-    print(f"⚠ Файл найден ({REACTION_IMAGE_PATH}), но не читается как изображение.")'''
- 
 
 WINK_THRESHOLD = 0.3
 WINK_OPEN_THRESHOLD = 0.3
@@ -78,44 +67,6 @@ def get_blendshapes_dict(detection_result, face_index=0):
     return {c.category_name: c.score for c in categories}
  
  
-'''def is_winking(blendshapes):
-    left = blendshapes.get('eyeBlinkLeft', 0.0)
-    right = blendshapes.get('eyeBlinkRight', 0.0)
-    left_wink = left > WINK_THRESHOLD and right < WINK_OPEN_THRESHOLD
-    right_wink = right > WINK_THRESHOLD and left < WINK_OPEN_THRESHOLD
-    return left_wink or right_wink'''
- 
- 
-'''def get_mouth_color_stats(frame, face_landmarks):
-    """Возвращает (avg_hue, avg_sat) внутренней области рта, либо (None, None)."""
-    h, w, _ = frame.shape
-    inner_lip_idx = [78, 191, 80, 81, 82, 13, 312, 311, 310, 415, 308,
-                      95, 88, 178, 87, 14, 317, 402, 318, 324]
-    xs = [int(face_landmarks[i].x * w) for i in inner_lip_idx]
-    ys = [int(face_landmarks[i].y * h) for i in inner_lip_idx]
-    x1, x2 = max(min(xs), 0), min(max(xs), w - 1)
-    y1, y2 = max(min(ys), 0), min(max(ys), h - 1)
- 
-    if x2 <= x1 or y2 <= y1:
-        return None, None
- 
-    mouth_roi = frame[y1:y2, x1:x2]
-    if mouth_roi.size == 0:
-        return None, None
- 
-    hsv_roi = cv2.cvtColor(mouth_roi, cv2.COLOR_BGR2HSV)
-    avg_hue = float(np.mean(hsv_roi[:, :, 0]))
-    avg_sat = float(np.mean(hsv_roi[:, :, 1]))
-    return avg_hue, avg_sat'''
- 
- 
-'''def is_tongue_out(jaw_open, avg_hue, avg_sat):
-    if jaw_open < JAW_OPEN_THRESHOLD:
-        return False
-    if avg_hue is None:
-        return False
-    is_pinkish = (avg_hue < 15 or avg_hue > 135) and avg_sat > 60
-    return is_pinkish'''
 
 def check_wink_tongue(ctx):
     b = ctx['b']
@@ -269,15 +220,7 @@ while cap.isOpened():
                 cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1,
             )
  
- 
-        '''eye_blink_left = blendshapes.get('eyeBlinkLeft', 0.0)
-        eye_blink_right = blendshapes.get('eyeBlinkRight', 0.0)
-        jaw_open = blendshapes.get('jawOpen', 0.0)
-        avg_hue, avg_sat = get_mouth_color_stats(frame, face_landmarks)
- 
-        winking = is_winking(blendshapes)
-        tongue = is_tongue_out(jaw_open, avg_hue, avg_sat)
-        expression_triggered = winking and tongue'''
+
         
     if triggered_expr is not None and triggered_expr.get('image') is not None:
         cv2.imshow('Reaction', triggered_expr['image'])
