@@ -78,15 +78,15 @@ def get_blendshapes_dict(detection_result, face_index=0):
     return {c.category_name: c.score for c in categories}
  
  
-def is_winking(blendshapes):
+'''def is_winking(blendshapes):
     left = blendshapes.get('eyeBlinkLeft', 0.0)
     right = blendshapes.get('eyeBlinkRight', 0.0)
     left_wink = left > WINK_THRESHOLD and right < WINK_OPEN_THRESHOLD
     right_wink = right > WINK_THRESHOLD and left < WINK_OPEN_THRESHOLD
-    return left_wink or right_wink
+    return left_wink or right_wink'''
  
  
-def get_mouth_color_stats(frame, face_landmarks):
+'''def get_mouth_color_stats(frame, face_landmarks):
     """Возвращает (avg_hue, avg_sat) внутренней области рта, либо (None, None)."""
     h, w, _ = frame.shape
     inner_lip_idx = [78, 191, 80, 81, 82, 13, 312, 311, 310, 415, 308,
@@ -106,7 +106,7 @@ def get_mouth_color_stats(frame, face_landmarks):
     hsv_roi = cv2.cvtColor(mouth_roi, cv2.COLOR_BGR2HSV)
     avg_hue = float(np.mean(hsv_roi[:, :, 0]))
     avg_sat = float(np.mean(hsv_roi[:, :, 1]))
-    return avg_hue, avg_sat
+    return avg_hue, avg_sat'''
  
  
 '''def is_tongue_out(jaw_open, avg_hue, avg_sat):
@@ -124,12 +124,8 @@ def check_wink_tongue(ctx):
     winking = (left > WINK_THRESHOLD and right < WINK_OPEN_THRESHOLD) or \
               (right > WINK_THRESHOLD and left < WINK_OPEN_THRESHOLD)
     
-    if ctx['jaw_open'] < JAW_OPEN_THRESHOLD or ctx['hue'] is None:
-        tongue = False
-    else:
-        tongue = (ctx['hue'] < 15 or ctx['hue'] > 135) and ctx['sat'] > 60
-        
-    return winking and tongue
+    mouth_open = ctx["jaw_open"] > JAW_OPEN_THRESHOLD
+    return winking and  mouth_open
 
 def check_smile(ctx):
     b = ctx['b']
@@ -236,12 +232,9 @@ while cap.isOpened():
  
         blendshapes = get_blendshapes_dict(detection_result)
         face_landmarks = detection_result.face_landmarks[0]
-        avg_hue, avg_sat = get_mouth_color_stats(frame, face_landmarks)
         ctx = {
             "b": blendshapes,
             "jaw_open": blendshapes.get("jawOpen", 0.0),
-            "hue": avg_hue,
-            "sat": avg_sat,
         }
  
         # Проверяем выражения по очереди, срабатывает первое подошедшее
